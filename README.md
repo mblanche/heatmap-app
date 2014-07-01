@@ -3,7 +3,7 @@ heatmap-app
 
 A Shiny App for Interactive Gene Expression HeatMap Visualisation
 
-This is small Shiny App to display an interactive clustering/heatmap of differential gene expression. It takes as
+This is a small Shiny App to display an interactive clustering/heatmap of differential gene expression. It takes as
 data a list of DGELRT objects created from the edgeR package. Each slot of the list is name after the experiment
 (the list names will show up at the bottom of the heatmap)
 
