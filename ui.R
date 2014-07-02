@@ -52,15 +52,16 @@ shinyUI(fluidPage(
                         max = zlim,
                         value = zlim,
                         step=0.5
-                        )
-            
+                        ),
+
+            uiOutput("message")
             
             ),
         
         ## Show a heatmap
         mainPanel(
-            plotOutput("plot",height="600px"),
-            textOutput("text")
+            textOutput("mainText"),
+            uiOutput("plotUI")
             )
         )
     ))

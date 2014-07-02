@@ -3,5 +3,3 @@
 *.Rhistory
 
 .RData
-
-*featCovs*

@@ -2,7 +2,7 @@ library(edgeR)
 
 ## Reading the DGE data from disk
 saved.data <- readRDS("data/dge.rds")
-
+gene2name <- readRDS("data/gene2name.rds")
 
 ## This function takes a matrix of fold change
 ## with the column names as sample names
