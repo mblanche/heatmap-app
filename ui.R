@@ -54,6 +54,7 @@ shinyUI(fluidPage(
                         step=0.5
                         ),
 
+            uiOutput("heightSelector"),
             uiOutput("message")
             
             ),

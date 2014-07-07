@@ -1,14 +1,16 @@
 library(edgeR)
+library(RColorBrewer)
 
 ## Reading the DGE data from disk
 saved.data <- readRDS("data/dge.rds")
 gene2name <- readRDS("data/gene2name.rds")
+hc.cols <- brewer.pal(9,"Set1")
 
 ## This function takes a matrix of fold change
 ## with the column names as sample names
 ## It also takes a gene wise cluster to sort the matrix and draw a dendrogram
 ## Finaly, it takes a zlim (a min and max range) to adjust the heatmap contrast
-plotHeatMap <- function(d,cluster,zlim){
+plotHeatMap <- function(d,cluster,zlim,height){
 
     ## Picking up a color scheme
     ## because the zlim have different value, I need to center them on black
@@ -20,24 +22,30 @@ plotHeatMap <- function(d,cluster,zlim){
     ## Rescale the d to set the range to zlim
     d[d < zlim[1]] <- zlim[1]
     d[d > zlim[2]] <- zlim[2]
-
     t <- d
     t[d<=0] <- c(1:128)[cut(d[d <= 0],128,labels=FALSE)]
     t[d>0] <- c(127:256)[cut(d[d > 0],127,labels=FALSE)]
-    
     d <- t
+
+    ## Color the dendrogram where the cluster breaks
+    hc <- colBranches(as.dendrogram(cluster),height,hc.cols)
     
     ## Creating the canvas
     layout(matrix(c(1,2,0,3),ncol=2,byrow=TRUE)
            ,widths=c(30,70),heights=c(85,15))
     ## Plotting the gene dendrogram
     par(mar = c(2,1,2,0))
-    plot(as.dendrogram(cluster),
-         axes=FALSE,
-         yaxt='n',
+    plot(hc,
+         axes=TRUE,
+         yaxt='s',
          yaxs='i',
+         xaxt='n',
+         xaxs='i',
          horiz=TRUE,
-         leaflab='none')
+         leaflab='none',
+         ylab="Height")
+    ## Add a marker where dendrogram is broken
+    abline(v=height,lty=2,col='red')
     ## Plotting he heatmap
     par(mar = c(2,0.2,2,1))
     image(t(d[cluster$order,]),
@@ -61,4 +69,32 @@ plotHeatMap <- function(d,cluster,zlim){
           yaxt='n')
     axis(side=1,at=c(0,0.5,1),labels=format(c(zlim[1],0,zlim[2]),digits=2))
 
+}
+
+colbranches <- function(n, col) {
+    a <- attributes(n) 
+    attr(n, "edgePar") <- c(a$edgePar, list(col=col,lty=1,lwd=1))
+    return(n) # Don't forget to return the node!
+}
+
+
+colBranches <- function(hc,height,cols=cols){
+    .col.counter <<- 0
+    breakAt <- function(hc,height,cols){
+        res <- lapply(hc,function(sub.hc){
+            if (attributes(sub.hc)$height < height){
+                if (.col.counter == length(cols))
+                    .col.counter <<- 0
+                .col.counter <<- .col.counter+1
+                return(dendrapply(sub.hc,colbranches,cols[.col.counter]))
+            } else {
+                res <- breakAt(sub.hc,height,cols)
+                sub.hc <- do.call(merge,c(res,height=attributes(sub.hc)$height))
+                attr(sub.hc,'edgePar') <- list(lty=2,col='black')
+                return(sub.hc)
+            }
+        })
+    }
+    res <- breakAt(hc,height,cols)
+    do.call(merge,c(res,height=attributes(hc)$height))
 }

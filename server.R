@@ -73,6 +73,22 @@ shinyServer(function(input, output) {
             }
         }
     })
+
+    ## Rendering a slider to select the height used to break the cluster
+    output$heightSelector <- renderUI({
+        r <- range(cluster()$height)
+        list(hr(),
+             h5("Creating clusters of genes"),
+             sliderInput("height",
+                         "Break in clusters at height of:",
+                         min = round(r[2]*0.2,2),
+                         max = r[2],
+                         value = r[2],
+                         format = '#.00'
+                         )
+             )
+    })
+
     
     ## Rendering our heatmap
     ## The ui main panel is render at the same time
@@ -99,7 +115,8 @@ shinyServer(function(input, output) {
                         c(call("tabPanel","Plot",
                                call("plotOutput","plot",height='600px'),
                                call("downloadButton",'img','Save as png')
-                                ),
+                               ),
+                          call("tabPanel","Clusters",call("uiOutput","clusters")),
                           lapply(input$samples,function(s){
                               call("tabPanel",s,
                                    call('textOutput',paste0("text_",s)),
@@ -107,18 +124,15 @@ shinyServer(function(input, output) {
                                    call("downloadButton",paste0("save_",s),'Save as csv')
                                    )
                           })
-                           )
+                          )
                         )
             })
-            ## Render a heatmap and dendrogram in the ploting tab panel
-             output$plot <- renderPlot({
-                 plotHeatMap(data(),cluster(),c(input$zlim.low,input$zlim.high) )
-             })
+            
         }
     })
     
     
-    ## Create a reactive context to populate the tab panels with content
+    ## Create a reactive context to populate the sample tab panels with content
     observe({
         lapply(names(values), function(s){
             ## Add a DataTable of gene selected in the heatmap
@@ -131,6 +145,64 @@ shinyServer(function(input, output) {
             return(s)
         })
     })
+
+    ## Create a reactive context to populate the cluster tab panel
+    observe({
+        if (!is.null(input$height) & !is.null(cluster()) ){
+            ## Re-creating the colored dendrogram
+            hc <- colBranches(as.dendrogram(cluster()),input$height,hc.cols)
+
+            ## Cutting the clustering into sub-group
+            cuts <- cut(hc,h=input$height) 
+            sub.dendro <- rev(cuts$lower)
+            groups <- lapply(sub.dendro,unlist)
+
+            ## Creating a new UI for each group
+            ui <- unlist(lapply(seq(groups),function(i){
+                c(call("h3",paste("Cluster",i)),
+                  call("plotOutput",paste0("subDendro_",i),height="100px",width="100px"),
+                  call("dataTableOutput",paste0("cluster_",i)),
+                  call("downloadButton",paste0("saveCluster_",i),'Save as csv'),
+                  call("hr")
+                  )
+                
+            }))
+            output$clusters <- renderUI({ lapply(ui,eval) })
+
+            ## Rendering the sub-dendro plot and a table of genes
+            lapply(seq(groups),function(i){
+                output[[paste0('subDendro_',i)]] <- renderPlot({
+                    par(mar=rep(0,4))
+                    plot(sub.dendro[[i]],
+                         axes=FALSE,
+                         yaxt='s',
+                         yaxs='i',
+                         xaxt='n',
+                         xaxs='i',
+                         horiz=TRUE,
+                         leaflab='none')
+                })
+
+
+                geneIds <- rownames(data())[groups[[i]]]
+                geneSymbol <- gene2name$external_gene_id[match(geneIds,gene2name$ensembl_gene_id)]
+                linkOut <- 'http://flybase.org/reports/'
+                links <- hwrite(geneSymbol, 
+                                link = paste0(linkOut,geneIds),
+                                table = FALSE)
+                
+                output[[paste0('cluster_',i)]] <- renderDataTable(data.frame(Genes=links),
+                                                                  options=list(iDisplayLength=10))
+                
+                output[[paste0('saveCluster_',i)]] <- downloadHandler(
+                    filename = function() { paste0("cluster_",i,"_h",input$height,".csv") },
+                    content = function(file) { write.csv(data.frame(gene.id=geneIds,symbol=geneSymbol),file=file) }
+                    )
+                
+            })
+        }
+        
+    })
     
     ## Function to download the heatmap as png
     output$img <- downloadHandler(
@@ -142,7 +214,24 @@ shinyServer(function(input, output) {
         }
         )
     
+    ## Create heatmap
+    observe({
+        if(!is.null(cluster())){
+            ##if ( & length(cluster()) > 0 & length(input$height) > 0){
+            if (length(input$height) > 0){
+                output$plot <- renderPlot({
+                    plotHeatMap(data(),
+                                cluster(),
+                                c(input$zlim.low,input$zlim.high),
+                                input$height
+                                )
+                })
+            }
+        }
+    })
+    
 })
+
 
 
 
