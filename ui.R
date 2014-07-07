@@ -1,4 +1,5 @@
 library(shiny)
+library(shinyIncubator)
 
 source("helper.R")
 
@@ -7,9 +8,9 @@ samples <- names(saved.data)
 
 ## Define UI for application that draws a histogram
 shinyUI(fluidPage(
-    
+    progressInit(),    
     ## Application title
-    titlePanel("Interactive Gene Heatmap"),
+    titlePanel("Differential Expression Interactive Heatmap"),
     
     ## Sidebar with a slider input for the number of bins
     sidebarLayout(

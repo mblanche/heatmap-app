@@ -1,33 +1,36 @@
 library(shiny)
+library(shinyIncubator)
 library(hwriter)
 
 source("helper.R")
 
 # Define server logic required to draw a heatmap
-shinyServer(function(input, output) {
+shinyServer(function(input, output, session) {
     
     ## A reactive expression computing what to cluster and display
     data <- reactive({
-        samples <- input$samples
-        ## Keep any gene that passes the FC and pval filter in one experiment
-        filter <- rowSums(sapply(saved.data[samples], function(d){
-            ## here, I am filtering on the pvalue and fold change the user chooses
-            ## Creating two filters depending on reactive values from the UI
-            fc.filter <- abs(d$table$logFC) >= log2(input$FC)
-                    pv.filter <- d$table$PV <  input$pval
-            return(fc.filter & pv.filter)
-        })) > 0
-        
-        ## get the fold change as a matrix
-        FC.mat <- do.call(cbind,lapply(saved.data[samples],function(d){
-            res <- data.frame(d$table$logFC)
-            rownames(res) <- rownames(d$table)
-            return(res)
-        }))
-        colnames(FC.mat) <- names(saved.data[samples])
-        
-        ## Filter the data
-        return(FC.mat[filter,,drop=FALSE])
+        if (is.null(input$samples) || input$pval==0) {
+            return(NULL)
+        } else {
+            samples <- input$samples ## Just to make the code smaller to read
+            ## Keep any gene that passes the FC and pval filter in one experiment
+            filter <- rowSums(sapply(saved.data[samples], function(d){
+                ## here, I am filtering on the pvalue and fold change the user chooses
+                ## Creating two filters depending on reactive values from the UI
+                fc.filter <- abs(d$table$logFC) >= log2(input$FC)
+                pv.filter <- d$table$PV <  input$pval
+                return(fc.filter & pv.filter)
+            })) > 0
+            ## get the fold change as a matrix
+            FC.mat <- do.call(cbind,lapply(saved.data[samples],function(d){
+                res <- data.frame(d$table$logFC)
+                rownames(res) <- rownames(d$table)
+                return(res)
+            }))
+            colnames(FC.mat) <- names(saved.data[samples])
+            ## Filter the data
+            return(FC.mat[filter,,drop=FALSE])
+        }
     })
     
     ## Generate the cluster, a second reactive expression
@@ -36,24 +39,29 @@ shinyServer(function(input, output) {
     ## Using a observer on the data to make sure I have something to cluster.
     ## Could perhaps merge with lower evaluation
     cluster <- reactive({
-        ## filter the NA value first
-        forHeatmap <- data()[!apply(is.na( data() ),1,any),]
-        ## Returning the clustered data
-        cluster <- try(hclust(dist( forHeatmap )),silent=TRUE)
-        if(class(cluster) == 'try-error'){
+        if(length(data()) == 0){
             return(NULL)
         } else {
-            return(cluster)
+            ## filter the NA value first
+            forHeatmap <- data()[!apply(is.na( data() ),1,any),]
+            ## Returning the clustered data
+            cluster <- try(hclust(dist( forHeatmap )),silent=TRUE)
+            if(class(cluster) == 'try-error'){
+                return(NULL)
+            } else {
+                return(cluster)
+            }
         }
     })
-            
+
     ## Create a set of reactive values to store tables of genes displayed in the heatmap
     values <- reactiveValues()
     ## Create a reactive context to assign the reactive values
     observe({
-        if(nrow(data()) == 0){
+        if(is.null(data())){
             values <- NULL
         } else {
+
             for (s in input$samples) {
                 ## The reactive values data() should trigger re-evalution of this bit on modification
                 geneSymbol <- gene2name$external_gene_id[match(rownames(data()),gene2name$ensembl_gene_id)]
@@ -71,22 +79,27 @@ shinyServer(function(input, output) {
                 colnames(d) <- c('Gene','log2(FC)','p-value','adj. p-value')
                 values[[s]] <- d
             }
+
         }
     })
-
+    
     ## Rendering a slider to select the height used to break the cluster
     output$heightSelector <- renderUI({
-        r <- range(cluster()$height)
-        list(hr(),
+        if (is.null(cluster())){
+            return(NULL)
+        } else {
+            r <- range(cluster()$height)
+            list(hr(),
              h5("Creating clusters of genes"),
-             sliderInput("height",
-                         "Break in clusters at height of:",
-                         min = round(r[2]*0.2,2),
-                         max = r[2],
-                         value = r[2],
-                         format = '#.00'
-                         )
-             )
+                 sliderInput("height",
+                             "Break in clusters at height of:",
+                             min = round(r[2]*0.2,2),
+                             max = r[2],
+                             value = r[2],
+                             format = '#.00'
+                             )
+                 )
+        }
     })
 
     
@@ -131,21 +144,24 @@ shinyServer(function(input, output) {
         }
     })
     
-    
     ## Create a reactive context to populate the sample tab panels with content
     observe({
         lapply(names(values), function(s){
+            ## Do some cleanup before saving
+            d <- values[[s]]
+            d$Gene <- sub("<a.+?>(.+)</a>","\\1",d$Gene)
+            d <- cbind(FBid=rownames(d),d)
             ## Add a DataTable of gene selected in the heatmap
             output[[paste0('table_',s)]] <- renderDataTable(values[[s]],options=list(iDisplayLength=10))
             ## Add a download button to allow download of a csv file
             output[[paste0('save_',s)]] <- downloadHandler(
                 filename = function() { paste0(s,".csv") },
-                content = function(file) { write.csv( values[[s]],file=file) }
+                content = function(file) { write.csv(d,file=file,row.names=FALSE) }
                 )
             return(s)
         })
     })
-
+    
     ## Create a reactive context to populate the cluster tab panel
     observe({
         if (!is.null(input$height) & !is.null(cluster()) ){
@@ -183,7 +199,7 @@ shinyServer(function(input, output) {
                          leaflab='none')
                 })
 
-
+                ## Rendering the tables of gene for each cluster, linking out to flybase
                 geneIds <- rownames(data())[groups[[i]]]
                 geneSymbol <- gene2name$external_gene_id[match(geneIds,gene2name$ensembl_gene_id)]
                 linkOut <- 'http://flybase.org/reports/'
@@ -193,12 +209,15 @@ shinyServer(function(input, output) {
                 
                 output[[paste0('cluster_',i)]] <- renderDataTable(data.frame(Genes=links),
                                                                   options=list(iDisplayLength=10))
-                
+
+                ## Creating functions to save the tables link to the buttons
                 output[[paste0('saveCluster_',i)]] <- downloadHandler(
-                    filename = function() { paste0("cluster_",i,"_h",input$height,".csv") },
-                    content = function(file) { write.csv(data.frame(gene.id=geneIds,symbol=geneSymbol),file=file) }
+                    filename = function() { paste0("cluster_",i,"_h",round(input$height,1),".csv") },
+                    content = function(file) {
+                        write.csv(data.frame(gene.id=geneIds,symbol=geneSymbol),
+                                  file=file,row.names=FALSE)
+                    }
                     )
-                
             })
         }
         
@@ -208,23 +227,28 @@ shinyServer(function(input, output) {
     output$img <- downloadHandler(
         filename = function() { "heatmap.png" },
         content = function(file) {
-            pdf(file)
-            plotHeatMap(data(),cluster(),c(input$zlim.low,input$zlim.high) )
+            png(file)
+            plotHeatMap(data(),cluster(),c(input$zlim.low,input$zlim.high),input$height,noMarker=TRUE)
             dev.off()
         }
         )
     
     ## Create heatmap
     observe({
-        if(!is.null(cluster())){
-            ##if ( & length(cluster()) > 0 & length(input$height) > 0){
+        if(length(input$samples) != 0  & !is.null(cluster())){
             if (length(input$height) > 0){
-                output$plot <- renderPlot({
-                    plotHeatMap(data(),
-                                cluster(),
-                                c(input$zlim.low,input$zlim.high),
-                                input$height
-                                )
+
+                withProgress(session, {
+                    setProgress(message = "Recomputing the heatmap and cluster data",
+                                detail = "This may take a few moments...")
+                    
+                    output$plot <- renderPlot({
+                        plotHeatMap(data(),
+                                    cluster(),
+                                    c(input$zlim.low,input$zlim.high),
+                                    input$height
+                                    )
+                    })
                 })
             }
         }

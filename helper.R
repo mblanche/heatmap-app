@@ -10,8 +10,7 @@ hc.cols <- brewer.pal(9,"Set1")
 ## with the column names as sample names
 ## It also takes a gene wise cluster to sort the matrix and draw a dendrogram
 ## Finaly, it takes a zlim (a min and max range) to adjust the heatmap contrast
-plotHeatMap <- function(d,cluster,zlim,height){
-
+plotHeatMap <- function(d,cluster,zlim,height,noMarker=FALSE){
     ## Picking up a color scheme
     ## because the zlim have different value, I need to center them on black
     ## So, i'll have a high and a low palette
@@ -45,7 +44,7 @@ plotHeatMap <- function(d,cluster,zlim,height){
          leaflab='none',
          ylab="Height")
     ## Add a marker where dendrogram is broken
-    abline(v=height,lty=2,col='red')
+    if(noMarker == FALSE) abline(v=height,lty=2,col='red')
     ## Plotting he heatmap
     par(mar = c(2,0.2,2,1))
     image(t(d[cluster$order,]),
