@@ -37,7 +37,7 @@ shinyUI(fluidPage(
 
             ## Selecting the heat map contrast
             hr(),
-            h5("Ajusting the contrast"),
+            h5("Ajusting the contrast (in log2 space)"),
 
             sliderInput("zlim.low",
                         "Maximum Blue Caped At:",
