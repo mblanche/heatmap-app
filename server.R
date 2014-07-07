@@ -70,6 +70,7 @@ shinyServer(function(input, output, session) {
                 
                 links <- hwrite(geneSymbol, 
                                 link = paste0(linkOut,rownames(data())),
+                                target = s,
                                 table = FALSE)
                 
                 d <- data.frame('id'= links,
@@ -205,6 +206,7 @@ shinyServer(function(input, output, session) {
                 linkOut <- 'http://flybase.org/reports/'
                 links <- hwrite(geneSymbol, 
                                 link = paste0(linkOut,geneIds),
+                                target = 'subCluster',
                                 table = FALSE)
                 
                 output[[paste0('cluster_',i)]] <- renderDataTable(data.frame(Genes=links),
