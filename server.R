@@ -133,7 +133,8 @@ shinyServer(function(input, output, session) {
                                call("plotOutput","plot",height='600px'),
                                call("downloadButton",'img','Save as png')
                                ),
-                          call("tabPanel","Clusters",call("uiOutput","clusters")),
+                          call("tabPanel","Clusters",
+                               call("uiOutput","clusters")),
                           lapply(input$samples,function(s){
                               call("tabPanel",s,
                                    call('textOutput',paste0("text_",s)),
@@ -223,6 +224,7 @@ shinyServer(function(input, output, session) {
                                 table = FALSE)
 
                 d <- as.data.frame(sapply(input$samples,function(s) saved.data[[s]]$table[geneIds,'logFC']))
+                names(d) <- paste(names(d),"Log2(FC)")
                 
                 output[[paste0('cluster_',i)]] <- renderDataTable(cbind(Genes=links,d),
                                                                   options=list(iDisplayLength=10))
