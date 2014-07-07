@@ -45,15 +45,41 @@ shinyServer(function(input, output, session) {
             ## filter the NA value first
             forHeatmap <- data()[!apply(is.na( data() ),1,any),]
             ## Returning the clustered data
-            cluster <- try(hclust(dist( forHeatmap )),silent=TRUE)
+            hc <- try(as.dendrogram(hclust(dist( forHeatmap ))),silent=TRUE)
             if(class(cluster) == 'try-error'){
                 return(NULL)
             } else {
-                return(cluster)
+                return(hc)
             }
         }
     })
 
+    ## Computing a cluster colored based on selected height
+    color.cluster <- reactive ({
+        if (length(input$height) != 0){
+            hc <- colBranches(cluster(),input$height,hc.cols)
+        }
+    })
+
+    ## Rendering a slider to select the height used to break the cluster
+    output$heightSelector <- renderUI({
+        if (is.null(cluster())){
+            return(NULL)
+        } else {
+            h <- attributes(cluster())$height
+            list(hr(),
+                 h5("Creating clusters of genes"),
+                 sliderInput("height",
+                             "Break in clusters at height of:",
+                             min = round(h*0.2,2),
+                             max = h,
+                             value = h,
+                             format = '#.00'
+                             )
+                 )
+        }
+    })
+    
     ## Create a set of reactive values to store tables of genes displayed in the heatmap
     values <- reactiveValues()
     ## Create a reactive context to assign the reactive values
@@ -61,13 +87,10 @@ shinyServer(function(input, output, session) {
         if(is.null(data())){
             values <- NULL
         } else {
-
             for (s in input$samples) {
                 ## The reactive values data() should trigger re-evalution of this bit on modification
                 geneSymbol <- gene2name$external_gene_id[match(rownames(data()),gene2name$ensembl_gene_id)]
-                
                 linkOut <- 'http://flybase.org/reports/'
-                
                 links <- hwrite(geneSymbol, 
                                 link = paste0(linkOut,rownames(data())),
                                 target = s,
@@ -84,31 +107,11 @@ shinyServer(function(input, output, session) {
         }
     })
     
-    ## Rendering a slider to select the height used to break the cluster
-    output$heightSelector <- renderUI({
-        if (is.null(cluster())){
-            return(NULL)
-        } else {
-            r <- range(cluster()$height)
-            list(hr(),
-             h5("Creating clusters of genes"),
-                 sliderInput("height",
-                             "Break in clusters at height of:",
-                             min = round(r[2]*0.2,2),
-                             max = r[2],
-                             value = r[2],
-                             format = '#.00'
-                             )
-                 )
-        }
-    })
-
-    
     ## Rendering our heatmap
     ## The ui main panel is render at the same time
     ## Have some logic to deal with user not clicking any samples
     observe({
-        if(length(input$samples) == 0 || is.null(values) || is.null(cluster())){
+        if(length(input$samples) == 0 || is.null(values) || is.null(color.cluster())){
             ## Wipeout the ploting area
             output$main <- renderUI({ return(NULL) })
             ## Wipeout the tabsets
@@ -142,6 +145,19 @@ shinyServer(function(input, output, session) {
                         )
             })
             
+            output$mainText <- renderText({ class(color.cluster()) })
+            ## Render the heatmap
+            withProgress(session, {
+                setProgress(message = "Recomputing the heatmap and cluster data",
+                            detail = "This may take a few moments...")
+                output$plot <- renderPlot({
+                    plotHeatMap(data(),
+                                color.cluster(),
+                                c(input$zlim.low,input$zlim.high),
+                                input$height
+                                )
+                })
+            })
         }
     })
     
@@ -165,12 +181,9 @@ shinyServer(function(input, output, session) {
     
     ## Create a reactive context to populate the cluster tab panel
     observe({
-        if (!is.null(input$height) & !is.null(cluster()) ){
-            ## Re-creating the colored dendrogram
-            hc <- colBranches(as.dendrogram(cluster()),input$height,hc.cols)
-
+        if (!is.null(color.cluster()) ){
             ## Cutting the clustering into sub-group
-            cuts <- cut(hc,h=input$height) 
+            cuts <- cut(color.cluster(),h=input$height) 
             sub.dendro <- rev(cuts$lower)
             groups <- lapply(sub.dendro,unlist)
 
@@ -208,10 +221,12 @@ shinyServer(function(input, output, session) {
                                 link = paste0(linkOut,geneIds),
                                 target = 'subCluster',
                                 table = FALSE)
-                
-                output[[paste0('cluster_',i)]] <- renderDataTable(data.frame(Genes=links),
-                                                                  options=list(iDisplayLength=10))
 
+                d <- as.data.frame(sapply(input$samples,function(s) saved.data[[s]]$table[geneIds,'logFC']))
+                
+                output[[paste0('cluster_',i)]] <- renderDataTable(cbind(Genes=links,d),
+                                                                  options=list(iDisplayLength=10))
+                
                 ## Creating functions to save the tables link to the buttons
                 output[[paste0('saveCluster_',i)]] <- downloadHandler(
                     filename = function() { paste0("cluster_",i,"_h",round(input$height,1),".csv") },
@@ -235,26 +250,6 @@ shinyServer(function(input, output, session) {
         }
         )
     
-    ## Create heatmap
-    observe({
-        if(length(input$samples) != 0  & !is.null(cluster())){
-            if (length(input$height) > 0){
-
-                withProgress(session, {
-                    setProgress(message = "Recomputing the heatmap and cluster data",
-                                detail = "This may take a few moments...")
-                    
-                    output$plot <- renderPlot({
-                        plotHeatMap(data(),
-                                    cluster(),
-                                    c(input$zlim.low,input$zlim.high),
-                                    input$height
-                                    )
-                    })
-                })
-            }
-        }
-    })
     
 })
 
