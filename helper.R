@@ -15,7 +15,7 @@ plotHeatMap <- function(d,hc,zlim,height,noMarker=FALSE){
     ## because the zlim have different value, I need to center them on black
     ## So, i'll have a high and a low palette
     cols <- colorRampPalette(c("blue","black","yellow"))(256)
-
+    
     ## Let's try to map the continous value in the matrix
     ## to the discrete color in cols, keeping 0 as black (128)
     ## Rescale the d to set the range to zlim
@@ -26,9 +26,6 @@ plotHeatMap <- function(d,hc,zlim,height,noMarker=FALSE){
     t[d>0] <- c(127:256)[cut(d[d > 0],127,labels=FALSE)]
     d <- t
 
-    ## Color the dendrogram where the cluster breaks
-    ##hc <- colBranches(as.dendrogram(cluster),height,hc.cols)
-    
     ## Creating the canvas
     layout(matrix(c(1,2,0,3),ncol=2,byrow=TRUE)
            ,widths=c(30,70),heights=c(85,15))
@@ -45,7 +42,7 @@ plotHeatMap <- function(d,hc,zlim,height,noMarker=FALSE){
          ylab="Height")
     ## Add a marker where dendrogram is broken
     if(noMarker == FALSE) abline(v=height,lty=2,col='red')
-    ## Plotting he heatmap
+    ## Plotting the heatmap
     par(mar = c(2,0.2,2,1))
     image(t(d[unlist(hc),]),
           col=cols,

@@ -53,11 +53,15 @@ shinyServer(function(input, output, session) {
             }
         }
     })
-
+    
     ## Computing a cluster colored based on selected height
     color.cluster <- reactive ({
-        if (length(input$height) != 0){
-            hc <- colBranches(cluster(),input$height,hc.cols)
+        if (is.null(cluster())){
+            return(NULL)
+        } else {
+            if (length(input$height) != 0){
+                hc <- colBranches(cluster(),input$height,hc.cols)
+            }
         }
     })
 
@@ -145,19 +149,16 @@ shinyServer(function(input, output, session) {
                           )
                         )
             })
-            
-            output$mainText <- renderText({ class(color.cluster()) })
-            ## Render the heatmap
-            withProgress(session, {
-                setProgress(message = "Recomputing the heatmap and cluster data",
-                            detail = "This may take a few moments...")
-                output$plot <- renderPlot({
-                    plotHeatMap(data(),
-                                color.cluster(),
-                                c(input$zlim.low,input$zlim.high),
-                                input$height
-                                )
-                })
+
+            ##withProgress(session, {
+              ##  setProgress(message = "Recomputing the heatmap and cluster data",
+                ##            detail = "This may take a few moments...")
+            output$plot <- renderPlot({
+                plotHeatMap(data(),
+                            color.cluster(),
+                            c(input$zlim.low,input$zlim.high),
+                            input$height
+                            )
             })
         }
     })
@@ -251,8 +252,6 @@ shinyServer(function(input, output, session) {
             dev.off()
         }
         )
-    
-    
 })
 
 
